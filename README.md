@@ -1,22 +1,30 @@
-# Master's Thesis: Modeling Relativistic Astrophysical Jets
+# Relativistic Astrophysical Jet Simulator
 
-This repository contains the core numerical modeling and visualization suite developed for my Master's Thesis at the University of Barcelona, titled **"Astrophysical Jet Modelling."**
+This repository contains a Python-based simulation suite developed for my Master's Thesis. The code models the kinematic evolution and radiative output (synchrotron emission) of relativistic astrophysical jets as they expand outward from a central source.
 
-The project focuses on the physical processes within relativistic jets, specifically calculating the luminosity evolution and spectral characteristics of synchrotron emission from relativistic electrons as they propagate away from a central engine.
+## 🛠️ Core Capabilities
 
-## 🛠 Project Overview
-The code simulates the physical conditions of a jet by accounting for relativistic effects, particle distribution dynamics, and the transition from co-moving to laboratory frames of reference.
+The script is built around a central physics engine (`RelativisticJetCalculator`) that evaluates the jet's properties along its propagation axis ($z$). 
 
-### Key Physics Features:
-* **Relativistic Doppler Boosting:** Implements transformations between the jet's co-moving frame and the observer's laboratory frame using the Doppler factor $\delta = [\gamma(1 - \beta \cos \theta)]^{-1}$.
-* **Synchrotron Emission Modeling:** Calculates the specific luminosity $L_{\nu}$ based on the magnetic field strength $B$, the relativistic particle density, and the volume of the emitting region.
-* **Jet Energetics:** Evaluates the total jet power and monitors the "1% Threshold" for luminosity to determine the efficiency of energy conversion at different distances from the source.
-* **Geometric Evolution:** Models the expansion of the jet radius $R$ as a function of the distance $z$ using specified opening angles.
+**Main Functions:**
+* **Kinematic Modeling:** Calculates the evolution of the Lorentz factor ($\Gamma$), jet radius, magnetic field strength, and various pressures (thermal vs. magnetic) over distance.
+* **Multi-Model Testing:** Automatically runs and compares different physical scenarios (Model A, B, and C) defined by varying external pressure gradients.
+* **Synchrotron Emission:** Computes the radiative spectrum across a wide range of frequencies, adjusting for relativistic Doppler boosting at different observer viewing angles ($\theta = 10^\circ$ and $45^\circ$).
+* **Automated Data Visualization:** Generates a comprehensive suite of plots, including acceleration profiles, energy evolution in log-log space, and time-lapse spectral flux curves.
 
-### Technical Implementation:
-* **Log-Log Slope Analysis:** Features a robust numerical slope calculator to determine the power-law index of luminosity decay in log-log space.
-* **Vectorized Numerical Integration:** Uses NumPy to handle complex physics equations over large spatial grids ($z \in [1, 300] Z_0$) with high efficiency.
-* **Publication-Quality Visualization:** Generates standardized comparative plots for various physical scenarios (e.g., "Standard," "High Density," "Low Magnetic Field") to analyze how input parameters affect the resulting emission.
+## ✅ Built-in Sanity Checks
 
-## 🚀 How to Use
-The main script `final_thesis_plot_generator.py` contains the simulation engine. It is designed to be modular, allowing for the comparison of multiple physical "cases" by simply adjusting the input dictionaries for magnetic fields, particle densities, and Lorentz factors.
+To ensure the physical validity of the numerical simulations, the code includes automated diagnostic checks at the end of the runtime:
+* **Mass Conservation Check:** Verifies that the mass accretion rate ($\dot{M}$) remains strictly constant across all $z$-steps.
+* **Energy Conservation Check:** Confirms that the sum of kinetic and thermal energy rates is conserved when magnetic fields are excluded.
+* **Radiative Efficiency Limits:** Compares the calculated comoving synchrotron luminosity against the total absolute jet power, ensuring the radiation does not exceed physical energy limits (tracking a strict 1% efficiency threshold).
+
+## 🚀 Usage
+
+The simulation is entirely self-contained in `final_thesis_plot_generator.py`. 
+
+**Dependencies:**
+* `numpy` (for vectorized array operations and log-space generation)
+* `matplotlib` (for generating the visual output suite)
+
+Run the script directly to execute the engine across all models. The script will sequentially output the calculated physical parameters to the console, followed by the generation of the matplotlib figures.
