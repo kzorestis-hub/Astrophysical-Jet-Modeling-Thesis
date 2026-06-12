@@ -466,7 +466,7 @@ for model in models:
     if len(z_data) > 2:
         # DYNAMIC MASK: Only calculate the slope during the active acceleration phase!
         # z > 1.2 ignores the injection boundary, gamma_data < 8.0 ignores the saturation plateau
-        mask = (z_data > 1.2) & (gamma_data < 8.0)
+        mask = (gamma_data < 8.0)
         
         if np.sum(mask) > 2:
             slope = calculate_slope(z_data[mask], gamma_data[mask])
@@ -530,8 +530,8 @@ for model in models:
         # v = c * sqrt(1 - 1/gamma^2) --> v*gamma = c * sqrt(gamma^2 - 1)
         v_gamma = c_speed * np.sqrt(gamma_data**2 - 1.0)
         
-        # Calculate slope for z > 10 Z_0
-        mask = z_data > 10
+        # Calculate slope during active acceleration phase (gamma < 8.0)
+        mask = gamma_data < 8.0
         slope = calculate_slope(z_data[mask], v_gamma[mask])
         label_text = f"{name} (Slope: {slope:.2f})"
         
@@ -542,7 +542,7 @@ ax.set_yscale('log')
 ax.set_xlim(1, 300)
 ax.set_xlabel(r'Distance $z$ ($Z_0$)', fontsize=12)
 ax.set_ylabel(r'$V_{bulk} * \Gamma$ (cm/s)', fontsize=12)
-ax.set_title('Proper Spatial Velocity ($V_{bulk} * \Gamma$)', fontsize=14, fontweight='bold')
+ax.set_title(r'Proper Spatial Velocity ($V_{bulk} * \Gamma$)', fontsize=14, fontweight='bold')
 ax.grid(True, which="both", alpha=0.3)
 ax.legend(loc='upper left')
 
@@ -557,8 +557,8 @@ for model in models:
         # Bernoulli conservation: h * Gamma = 10
         h_data = 10.0 / gamma_data
         
-        # Calculate slope for z > 10 Z_0
-        mask = z_data > 10
+        # Calculate slope during active acceleration phase (gamma < 8.0)
+        mask = gamma_data < 8.0
         slope = calculate_slope(z_data[mask], h_data[mask])
         label_text = f"{name} (Slope: {slope:.2f})"
         
@@ -900,99 +900,143 @@ plt.show()
 # ------------------------------------------------------------------------------
 fig_final3 = plt.figure(figsize=(10, 6))
 
-if len(z_data) > 0:
-    # Create a common frequency grid to interpolate onto
-    nu_global = np.logspace(7, 18, 500)
-    
-    integrand_1 = []
-    integrand_2 = []
-    
-    # Interpolate the differential flux onto the global frequency grid for each z-slice
-    for i in range(len(z_data)):
-        nu1 = np.array(n_c_list_thita1[i])
-        f1 = np.array(F_obs_1_z_nu[i])
-        # Fill with 0 if outside the bounds of the local frequency array
-        int_1 = np.interp(nu_global, nu1, f1, left=0, right=0)
-        integrand_1.append(int_1)
-        
-        nu2 = np.array(n_c_list_thita2[i])
-        f2 = np.array(F_obs_2_z_nu[i])
-        int_2 = np.interp(nu_global, nu2, f2, left=0, right=0)
-        integrand_2.append(int_2)
-        
-    integrand_1 = np.array(integrand_1)
-    integrand_2 = np.array(integrand_2)
-    
-    # Integrate mathematically over d(ln z) using the trapezoidal rule
-    # Integral of [z * dF/dz] d(ln z) = Integral of dF = Total Flux
-    log_z_data = np.log(z_data)
-    total_sed_1 = np.trapz(integrand_1, x=log_z_data, axis=0)
-    total_sed_2 = np.trapz(integrand_2, x=log_z_data, axis=0)
-    
-    plt.loglog(nu_global, total_sed_1, linewidth=3, label=r'$\theta = 10^{\circ}$', color='#e74c3c')
-    plt.loglog(nu_global, total_sed_2, linewidth=3, label=r'$\theta = 45^{\circ}$', color='#3498db')
+# Define a consistent color map matching the exact keys in your 'results' dictionary
+model_colors = {'Model A:': '#e74c3c', 'Model B:': '#2ecc71', 'Model C:': '#3498db'}
 
-    plt.xlabel(r'Frequency $\nu$ (Hz)', fontsize=12)
-    plt.ylabel(r'Total Observed SED $\nu F_{\nu}(z/dz)$ (erg/s/cm$^2$)', fontsize=12)
-    plt.title('Total Integrated Spectral Energy Distribution (Observer)', fontsize=14, fontweight='bold')
-    plt.xlim(1e7, 1e18)
+# Create a common global frequency grid to interpolate onto
+nu_global = np.logspace(7, 18, 500)
+
+all_valid_y = []
+
+# Loop over your actual dictionary named 'results'
+for model_name, data in results.items():
+    z_data = np.array(data['z'])  # Extract the raw z array
     
-    # Set bottom y-limit dynamically to ignore 0 artifacts from interpolation
-    valid_y = np.concatenate([total_sed_1[total_sed_1 > 0], total_sed_2[total_sed_2 > 0]])
-    if len(valid_y) > 0:
-        plt.ylim(np.min(valid_y) * 0.1, np.max(valid_y) * 10)
+    if len(z_data) > 0:
+        integrand_1 = []
+        integrand_2 = []
         
-    plt.grid(True, which="both", linestyle="--", alpha=0.5)
-    plt.legend(fontsize=12, loc='upper right')
+        # Interpolate the differential flux onto the global frequency grid
+        for i in range(len(z_data)):
+            # Theta 1 (10 degrees)
+            nu1 = np.array(data['n_c_list_thita1'][i])
+            f1 = np.array(data['F_obs_1_z_nu'][i])
+            int_1 = np.interp(nu_global, nu1, f1, left=0, right=0)
+            integrand_1.append(int_1)
+            
+            # Theta 2 (45 degrees)
+            nu2 = np.array(data['n_c_list_thita2'][i])
+            f2 = np.array(data['F_obs_2_z_nu'][i])
+            int_2 = np.interp(nu_global, nu2, f2, left=0, right=0)
+            integrand_2.append(int_2)
+            
+        integrand_1 = np.array(integrand_1)
+        integrand_2 = np.array(integrand_2)
+        
+        # Integrate mathematically over d(ln z) using the new NumPy 2.0 trapezoid rule
+        log_z_data = np.log(z_data)
+        total_sed_1 = np.trapezoid(integrand_1, x=log_z_data, axis=0)
+        total_sed_2 = np.trapezoid(integrand_2, x=log_z_data, axis=0)
+        
+        # Clean up the label string (removes the colon from "Model A:")
+        clean_name = model_name.replace(":", "")
+        
+        # Plot Theta 1 (Full solid line)
+        plt.loglog(nu_global, total_sed_1, linewidth=3, 
+                   color=model_colors[model_name], 
+                   label=rf'{clean_name} ($\theta = 10^{{\circ}}$)')
+        
+        # Plot Theta 2 (Transparent dashed line)
+        plt.loglog(nu_global, total_sed_2, linewidth=3, linestyle='--', 
+                   color=model_colors[model_name], alpha=0.4, 
+                   label=rf'{clean_name} ($\theta = 45^{{\circ}}$)')
+        
+        # Collect valid y-values for dynamic axis scaling
+        valid_y_1 = total_sed_1[total_sed_1 > 0]
+        valid_y_2 = total_sed_2[total_sed_2 > 0]
+        all_valid_y.extend(valid_y_1)
+        all_valid_y.extend(valid_y_2)
+
+plt.xlabel(r'Frequency $\nu$ (Hz)', fontsize=12)
+plt.ylabel(r'Total Observed SED $\nu F_{\nu}$ (erg/s/cm$^2$)', fontsize=12)
+plt.title('Total Integrated Spectral Energy Distribution (Observer)', fontsize=14, fontweight='bold')
+plt.xlim(1e7, 1e18)
+
+# Set bottom y-limit dynamically to ignore 0 artifacts from interpolation
+if len(all_valid_y) > 0:
+    plt.ylim(np.min(all_valid_y) * 0.1, np.max(all_valid_y) * 10)
+    
+plt.grid(True, which="both", linestyle="--", alpha=0.5)
+
+# Organize legend (3 columns looks cleaner with 6 items)
+plt.legend(fontsize=10, loc='lower center', bbox_to_anchor=(0.5, -0.25), ncol=3)
 
 plt.tight_layout()
-fig_final3.savefig(os.path.join(output_dir, "FINAL_3_SED_FILENAME.png"), dpi=300, bbox_inches='tight')
+fig_final3.savefig(os.path.join(output_dir, "FINAL_3_SED_ALL_MODELS.png"), dpi=300, bbox_inches='tight')
 plt.show()
 
 # ------------------------------------------------------------------------------
-# FINAL 1: Total Synchrotron Flux
+# FINAL 1: Total Synchrotron Flux (ALL MODELS)
 # ------------------------------------------------------------------------------
 fig_final1 = plt.figure(figsize=(10, 6))
+ax = fig_final1.add_subplot(111)
 
-if len(z_data) > 0:
-    F_bol_obs_1 = np.array(results[model_b_name]['F_bol_obs_1']) 
-    F_bol_obs_2 = np.array(results[model_b_name]['F_bol_obs_2']) 
+# Define a consistent color map matching the exact keys in your 'results' dictionary
+model_colors = {'Model A:': '#e74c3c', 'Model B:': '#2ecc71', 'Model C:': '#3498db'}
+
+# Loop over all models to plot them together
+for model_name, data in results.items():
+    clean_name = model_name.replace(":", "")
+    c = model_colors.get(model_name, '#000000')
     
-    # Filter for valid data
-    valid_mask1 = np.isfinite(F_bol_obs_1) & (F_bol_obs_1 > 0)
-    valid_mask2 = np.isfinite(F_bol_obs_2) & (F_bol_obs_2 > 0)
+    z_data = np.array(data['z']) / Z_0
     
-    # Mask for stable regime slope calculation (z > 10)
-    slope_mask1 = valid_mask1 & (z_data > 10)
-    slope_mask2 = valid_mask2 & (z_data > 10)
+    if len(z_data) > 0:
+        F_bol_obs_1 = np.array(data['F_bol_obs_1']) 
+        F_bol_obs_2 = np.array(data['F_bol_obs_2']) 
+        
+        # Filter for valid data
+        valid_mask1 = np.isfinite(F_bol_obs_1) & (F_bol_obs_1 > 0)
+        valid_mask2 = np.isfinite(F_bol_obs_2) & (F_bol_obs_2 > 0)
+        
+        # Mask for stable regime slope calculation (z > 10)
+        slope_mask1 = valid_mask1 & (z_data > 10)
+        slope_mask2 = valid_mask2 & (z_data > 10)
 
-    # Slope for Theta = 10
-    if np.sum(slope_mask1) > 2:
-        slope_1 = calculate_slope(z_data[slope_mask1], F_bol_obs_1[slope_mask1])
-        label_1 = r'$\theta = 10^{\circ}$ (Slope: %.2f)' % slope_1
-    else:
-        label_1 = r'$\theta = 10^{\circ}$'
+        # Slope for Theta = 10 (Solid line, Circle marker)
+        if np.sum(slope_mask1) > 2:
+            slope_1 = calculate_slope(z_data[slope_mask1], F_bol_obs_1[slope_mask1])
+            label_1 = rf'{clean_name} ($\theta = 10^{{\circ}}$) Slope: {slope_1:.2f}'
+        else:
+            label_1 = rf'{clean_name} ($\theta = 10^{{\circ}}$)'
 
-    # Slope for Theta = 45
-    if np.sum(slope_mask2) > 2:
-        slope_2 = calculate_slope(z_data[slope_mask2], F_bol_obs_2[slope_mask2])
-        label_2 = r'$\theta = 45^{\circ}$ (Slope: %.2f)' % slope_2
-    else:
-        label_2 = r'$\theta = 45^{\circ}$'
+        # Slope for Theta = 45 (Dashed line, Square marker)
+        if np.sum(slope_mask2) > 2:
+            slope_2 = calculate_slope(z_data[slope_mask2], F_bol_obs_2[slope_mask2])
+            label_2 = rf'{clean_name} ($\theta = 45^{{\circ}}$) Slope: {slope_2:.2f}'
+        else:
+            label_2 = rf'{clean_name} ($\theta = 45^{{\circ}}$)'
 
-    plt.loglog(z_data[valid_mask1], F_bol_obs_1[valid_mask1], marker='o', markersize=4, alpha=0.8, linewidth=2.5, label=label_1, color='#e74c3c')
-    plt.loglog(z_data[valid_mask2], F_bol_obs_2[valid_mask2], marker='s', markersize=4, alpha=0.8, linewidth=2.5, label=label_2, color='#3498db')
+        # Plotting the lines
+        ax.loglog(z_data[valid_mask1], F_bol_obs_1[valid_mask1], 
+                  linestyle='-', alpha=1.0, linewidth=2.5, 
+                  label=label_1, color=c)
+        
+        ax.loglog(z_data[valid_mask2], F_bol_obs_2[valid_mask2], 
+                  marker='s', markersize=7, linestyle='--', linewidth=1, alpha=0.8, 
+                  label=label_2, color=c)
 
-    plt.xlabel(r'Distance $z$ ($Z_0$)', fontsize=12)
-    # Note: Updated label to reflect the mathematically scaled z*dF/dz
-    plt.ylabel(r'Total Synchrotron Flux $z \frac{dF_{\mathrm{sync}}}{dz}$ (erg/s/cm$^2$)', fontsize=12)
-    plt.title('Total Synchrotron Flux vs Distance (As Seen by Observer)', fontsize=14, fontweight='bold')
-    plt.xlim(1, 300)
-    plt.grid(True, which="both", linestyle="--", alpha=0.5)
-    plt.legend(fontsize=12, loc='upper right') 
+ax.set_xlabel(r'Distance $z$ ($Z_0$)', fontsize=12)
+ax.set_ylabel(r'Total Synchrotron Flux $z \frac{dF_{\mathrm{sync}}}{dz}$ (erg/s/cm$^2$)', fontsize=12)
+ax.set_title('Total Synchrotron Flux vs Distance (As Seen by Observer)', fontsize=14, fontweight='bold')
+ax.set_xlim(1, 300)
+ax.grid(True, which="both", linestyle="--", alpha=0.5)
+
+# Move the legend outside to the bottom so it doesn't cover up any of the 6 lines
+ax.legend(fontsize=10, loc='lower center', bbox_to_anchor=(0.5, -0.35), ncol=2)
     
 plt.tight_layout()
-fig_final1.savefig(os.path.join(output_dir, "FINAL_1_FILENAME.png"), dpi=300, bbox_inches='tight')
+fig_final1.savefig(os.path.join(output_dir, "FINAL_1_ALL_MODELS.png"), dpi=300, bbox_inches='tight')
 plt.show()
 # ==============================================================================
 # FINAL 2: RADIATIVE EFFICIENCY & APPARENT LUMINOSITY (Scaled z*dL/dz)
@@ -1001,19 +1045,21 @@ print("\n" + "="*70)
 print("RADIATIVE EFFICIENCY CHECK (Differential Synchrotron Luminosity vs Jet Power)")
 print("="*70)
 
+# Create 3 subplots side-by-side
 fig_final2, axes_f2 = plt.subplots(1, 3, figsize=(16, 5))
 plt.subplots_adjust(hspace=0.3, wspace=0.3)
 
-for idx, model in enumerate(models):
-    name = model['name']
+# Loop safely over the 'results' dictionary
+for idx, (model_name, data) in enumerate(results.items()):
     ax = axes_f2[idx]
+    clean_name = model_name.replace(":", "")  # Cleans up "Model A:" to "Model A"
     
-    if 'L_lab_scaled' in results[name] and len(results[name]['L_lab_scaled']) > 0:
-        z_data_rad = np.array(results[name]['z']) / Z_0
-        L_lab_scaled_array = np.array(results[name]['L_lab_scaled'])
+    if 'L_lab_scaled' in data and len(data['L_lab_scaled']) > 0:
+        z_data_rad = np.array(data['z']) / Z_0
+        L_lab_scaled_array = np.array(data['L_lab_scaled'])
         valid_mask = np.isfinite(L_lab_scaled_array)
         
-        l_total_array = np.array(results[name]['l_total'])
+        l_total_array = np.array(data['l_total'])
         Total_Jet_Power = l_total_array[np.isfinite(l_total_array)][0]
         
         # 1. Total Jet Power (Solid Black)
@@ -1034,11 +1080,11 @@ for idx, model in enumerate(models):
             label_lab = r'Intrinsic $z \frac{dL_{\mathrm{lab}}}{dz}$'
             
         ax.loglog(z_data_rad[valid_mask], L_lab_scaled_array[valid_mask], marker='o', markersize=4, linewidth=2, 
-                    label=label_lab, color='#3498db', alpha=0.8)
+                  label=label_lab, color='#3498db', alpha=0.8)
         
         # 4. Apparent Observer Luminosity at Theta = 10° (Crimson Red / Triangle Marker)
-        if 'L_bol_app_1_scaled' in results[name] and len(results[name]['L_bol_app_1_scaled']) == len(z_data_rad):
-            L_app_1_scaled = np.array(results[name]['L_bol_app_1_scaled'])
+        if 'L_bol_app_1_scaled' in data and len(data['L_bol_app_1_scaled']) == len(z_data_rad):
+            L_app_1_scaled = np.array(data['L_bol_app_1_scaled'])
             
             if np.sum(slope_mask) > 2:
                 slope_app = calculate_slope(z_data_rad[slope_mask], L_app_1_scaled[slope_mask])
@@ -1047,14 +1093,14 @@ for idx, model in enumerate(models):
                 label_app = r'Apparent $z \frac{dL_{\mathrm{app}}}{dz}$ ($\theta=10^{\circ}$)'
                 
             ax.loglog(z_data_rad[valid_mask], L_app_1_scaled[valid_mask], marker='^', markersize=4, linewidth=2, 
-                        label=label_app, color='#e74c3c', alpha=0.9)
+                      label=label_app, color='#e74c3c', alpha=0.9)
 
         ax.set_xscale('log')
         ax.set_yscale('log')
         ax.set_xlim(1, 300)
         ax.set_xlabel(r'Distance $z$ ($Z_0$)', fontsize=11)
         ax.set_ylabel(r'Differential Luminosity (erg/s)', fontsize=11)
-        ax.set_title(f'{name}', fontsize=12, fontweight='bold')
+        ax.set_title(f'{clean_name}', fontsize=12, fontweight='bold')
         ax.grid(True, which="both", alpha=0.3)
         
         ax.legend(fontsize=9, loc='lower left')
@@ -1062,11 +1108,11 @@ for idx, model in enumerate(models):
         max_lum = np.max(L_lab_scaled_array[valid_mask])
         max_ratio = max_lum / Total_Jet_Power * 100
         
-        print(f"\n{name}:")
+        print(f"\n{clean_name}:")
         print(f"  Total Jet Power (L_j):         {Total_Jet_Power:.4e} erg/s")
         print(f"  Max Intrinsic L_lab (z/dz):    {max_lum:.4e} erg/s ({max_ratio:.4f}% of L_j)")
     else:
-        print(f"\n{name}: No valid scaled data generated to plot.")
+        print(f"\n{clean_name}: No valid scaled data generated to plot.")
 
 plt.tight_layout()
 fig_final2.savefig(os.path.join(output_dir, "FINAL_2_FILENAME.png"), dpi=300, bbox_inches='tight')
